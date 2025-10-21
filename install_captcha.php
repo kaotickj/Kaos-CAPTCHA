@@ -22,6 +22,7 @@ if (!is_dir($targetDir) || !is_writable($targetDir)) {
 
 // ---- Configuration: ranges and candidate fonts (operators should supply production fonts locally) ----
 $publicFonts = [
+    // Public/demo fonts (these may be placed in repo if desired)
     'DejaVuSans-Bold.ttf',
     'LiberationSans-Bold.ttf',
     'FreeSans.ttf'
@@ -46,11 +47,13 @@ $fontsSelected = array_slice($availableFonts, 0, 8);
 while (count($fontsSelected) < 8) $fontsSelected[] = $publicFonts[array_rand($publicFonts)];
 
 // Parameter ranges (randomized per install)
+// NOTE: changed 'digits' to 'length' to indicate captcha code length for alphanumeric codes.
+// Default length is 6 (recommended), but you can change to 5 if you prefer.
 $params = [
     'width' => 260,
     'height' => 90,
-    'digits' => 5,
-    'font_size' => rand(28, 36),                    // base font size
+    'length' => 6,                                 // code length (alphanumeric)
+    'font_size' => rand(28, 36),                   // base font size
     'rotation_min' => -rand(20,30),
     'rotation_max' => rand(20,30),
     'spacing_range' => rand(6,14),                 // px added to base x step
@@ -60,7 +63,9 @@ $params = [
     'noise_alpha' => rand(60,255),                 // opacity mapping (used if alpha supported)
     'color_brightness_min' => rand(80,140),        // avoid too-dark or too-light ranges if desired
     'line_color_brightness_min' => rand(100,200),
-    'font_list' => $fontsSelected
+    'font_list' => $fontsSelected,
+    // Character set: alphanumeric without ambiguous characters (0,O,1,l,I)
+    'char_set' => 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
 ];
 
 // small sanity adjustments
@@ -108,13 +113,25 @@ if (file_exists($backgroundImagePath)) {
     imagefilledrectangle($captchaImage, 0, 0, $width, $height, $white);
 }
 
-// generate digits
-$digitsCount = $params['digits'];
-$randomDigits = '';
-for ($i = 0; $i < $digitsCount; $i++) {
-    $randomDigits .= mt_rand(0,9);
+// generate alphanumeric code using seeded bytes (if pepper exists) or random_bytes
+$codeLength = $params['length'];
+$chars = $params['char_set'];
+$charsLen = strlen($chars);
+$randomCode = '';
+
+/* Use seeded bytes (if available) to derive indices
+   This ensures the generation is keyed by CAPTCHA_PEPPER when present.
+   The fallback to random_bytes() still provides cryptographic randomness.
+*/
+$seed = seeded_bytes(64);
+$seedIdx = 0;
+for ($i = 0; $i < $codeLength; $i++) {
+    // cycle through seed bytes and map to an index in $chars
+    $byte = ord($seed[$seedIdx++ % strlen($seed)]);
+    $idx = $byte % $charsLen;
+    $randomCode .= $chars[$idx];
 }
-$_SESSION['captcha'] = $randomDigits;
+$_SESSION['captcha'] = $randomCode;
 
 // select fonts by rotating the provided list
 $fontsList = $params['font_list'];
@@ -129,11 +146,11 @@ $textX = 20;
 $spacingRange = $params['spacing_range'];
 $baseSize = $params['font_size'];
 
-// create seeded bytes for per-request/ session determinism when pepper exists
-$seed = seeded_bytes(32);
+// create (new) seeded bytes for per-request/ session determinism when pepper exists
+$seed = seeded_bytes(128);
 $seedIdx = 0;
 
-foreach (str_split($randomDigits) as $digit) {
+foreach (str_split($randomCode) as $char) {
     // derive pseudo-random values from seed bytes to avoid exposing mt_rand distribution
     $b1 = ord($seed[$seedIdx++ % strlen($seed)]);
     $b2 = ord($seed[$seedIdx++ % strlen($seed)]);
@@ -150,7 +167,7 @@ foreach (str_split($randomDigits) as $digit) {
     $textColor = imagecolorallocate($captchaImage, $r, $g, $b);
 
     $font = $fontsList[array_rand($fontsList)];
-    imagettftext($captchaImage, $baseSize, $rotation, $textX, $textY, $textColor, $font, $digit);
+    imagettftext($captchaImage, $baseSize, $rotation, $textX, $textY, $textColor, $font, $char);
 
     $textX += 30 + (ord($seed[$seedIdx++ % strlen($seed)]) % ($spacingRange + 1));
 }
@@ -185,7 +202,7 @@ if (file_put_contents($outFile, $captchaPhp) === false) {
     echo "Failed to write $outFile\n";
     exit(1);
 }
-echo "Generated $outFile with randomized parameters.\n";
+echo "Generated $outFile with randomized parameters (alphanumeric codes enabled).\n";
 echo "Fonts used (update your 'fonts/' folder with these names if needed):\n";
 foreach ($fontsSelected as $f) echo " - $f\n";
 

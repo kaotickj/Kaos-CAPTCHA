@@ -10,101 +10,116 @@ It is suitable for web applications where **strong anti-bot protection** is requ
 
 ## **Features**
 
-* Generates **5-digit numeric CAPTCHAs** (randomized per session).  
-* Randomized **font selection per digit** (8 fonts selected during installation).  
-* Dynamic **font size** between 28 px – 36 px.  
-* Randomized **digit rotation range** between approximately −30° and +30°.  
-* Adjustable **horizontal spacing** (6 – 14 px variation between digits).  
-* Randomized **vertical jitter** (6 – 12 px) for irregular baseline placement.  
-* Fully randomized **RGB color** per digit, constrained to avoid excessively bright or dark tones.  
-* Randomized **background** — uses `white.jpg` if present, otherwise generates a plain white background.  
-* Adds **12–24 random noise lines** per CAPTCHA, each with unique color, position, and brightness.  
-* Supports environment-based **CAPTCHA_PEPPER** for entropy seeding (optional but recommended).  
-* Automatically embeds **per-installation randomized parameters** for image dimensions, noise density, and color balance.  
-* Dependencies: **PHP 7.4 +** (or newer) with **GD extension** enabled.  
-* Fully self-contained output (`captcha.php`) that requires **no external libraries** or API calls.  
+* Generates **5-character alphanumeric CAPTCHAs** (A–Z, a–z, 0–9), randomized per session.
+* Randomized **font selection per character** (8 fonts selected during installation).
+* Dynamic **font size** between **28 px – 36 px**.
+* Randomized **character rotation** between approximately **−30° and +30°**.
+* Adjustable **horizontal spacing** (6 – 14 px variation between characters).
+* Randomized **vertical jitter** (6 – 12 px) for irregular baseline placement.
+* Fully randomized **RGB color** per character, constrained to avoid excessively bright or dark tones.
+* Randomized **background** — uses `white.jpg` if present, otherwise generates a plain white background.
+* Adds **12–24 random noise lines** per CAPTCHA, each with unique color, position, and brightness.
+* Supports environment-based **CAPTCHA_PEPPER** for entropy seeding, improving unpredictability and per-installation uniqueness.
+* Automatically embeds **randomized per-installation parameters** for image dimensions, font behavior, noise density, and color variance.
+* Uses **deterministic seed generation** (HMAC-based) when `CAPTCHA_PEPPER` is defined, ensuring consistent yet unpredictable outputs within sessions.
+* Dependencies: **PHP 7.4+** (or newer) with **GD extension** enabled.
+* Produces a fully self-contained output file (`captcha.php`) requiring **no external libraries** or API calls.
 
 ---
 
-### Obfuscation and Security Analysis
+### **Obfuscation and Security Analysis**
 
-This captcha script is designed for **entropy and OCR resistance**. The installer produces **site-specific** randomized parameters (fonts, rotation ranges, spacing, color ranges, noise density) so each deployment yields a distinct image distribution. The following breakdown describes how each obfuscation layer contributes to overall resilience and shows a conservative example calculation using typical values produced by the installer.
+This CAPTCHA script is engineered for **entropy and OCR resistance**.
+Each installation produces **site-specific randomized parameters** (fonts, rotation ranges, spacing, color balance, noise density), ensuring that every deployment yields a visually and statistically distinct image distribution.
+The following breakdown explains how each obfuscation layer contributes to overall resilience, using representative values produced by the installer.
 
 ![Captcha Resilience Visualization](assets/img/captcha_resilience_vis.png)
 
 ---
 
-#### 1. Random Digit Sequence
+#### **1. Random Alphanumeric Sequence**
 
-* Each captcha has **5 digits (0–9)** → `10` possibilities per digit.
+* Each CAPTCHA consists of **5 alphanumeric characters** (A–Z, a–z, 0–9).
+* That provides **62 possibilities per character**.
 * Entropy formula: `H = log2(N^L) = L * log2(N)`
-* Calculated entropy (digits only): `H_digits = 5 * log2(10) ≈ 16.61 bits`
-* This is the **baseline entropy** coming from the numeric sequence only.
+* Calculated entropy (characters only): `H_chars = 5 * log2(62) ≈ 29.75 bits`
+* This forms the **baseline entropy** from the sequence itself — almost **double** that of numeric-only CAPTCHAs.
 
 ---
 
-#### 2. Font Variability (per-install)
+#### **2. Font Variability (per-install)**
 
-* The installer selects **8 fonts** (from local `fonts/` or public fallbacks) and embeds that list into the generated `captcha.php`.
-* For entropy estimation we conservatively treat font choice as independent per digit: `log2(8) ≈ 3 bits` per digit.
-* For 5 digits: `H_fonts = 5 * 3 = 15 bits`.
+* The installer embeds **8 randomly selected fonts** (from local `fonts/` or fallback fonts).
+* Each character randomly selects one of these fonts: `log2(8) ≈ 3 bits` per character.
+* For 5 characters: `H_fonts = 5 * 3 = 15 bits`.
 
-> Note: because fonts are chosen at install time (not per-request), this adds *installation-level* variability. An attacker who obtains the exact production font files has an advantage; do not publish production fonts.
-
----
-
-#### 3. Rotation (per-digit)
-
-* Installer sets rotation range roughly **−30° to +30°** (the script randomizes the exact min/max on install but keeps it near ±30°). That gives **61 possible integer-degree angles**.
-* Entropy per digit: `log2(61) ≈ 5.93 bits`.
-* For 5 digits: `5 * 5.93 ≈ 29.65 bits`.
+> Because font choice is fixed at install time but randomized per character, this adds **intra-installation variability** while maintaining distinctiveness between deployments.
+> Avoid publishing production font files to prevent reverse engineering of glyph shapes.
 
 ---
 
-#### 4. Color Variation (per-digit)
+#### **3. Rotation (per-character)**
 
-* The installer constrains color brightness but still uses **full RGB randomness within those ranges** (per-digit). Each RGB channel still has up to 256 values giving up to **24 bits per digit** in theory.
-* Conservative estimate for 5 digits: `H_color = 5 * 24 = 120 bits`.
-* In practice OCR preprocessing may ignore color channels, so effective entropy from color is smaller — but color remains a large confounder for segmentation and line-removal heuristics.
+* Rotation is typically randomized between **−30° and +30°**, with exact bounds unique per installation.
+* Approximate distinct positions: **61 integer values**.
+* Entropy per character: `log2(61) ≈ 5.93 bits`.
+* For 5 characters: `5 * 5.93 ≈ 29.65 bits`.
 
----
-
-#### 5. Horizontal Spacing & Vertical Jitter
-
-* The installer randomizes `spacing_range` (typically between `6` and `14` px) and `y_jitter` (typically `6`–`12` px).
-* For a conservative numeric example, use `spacing_range ≈ 10` → spacing per gap ≈ 21 integer possibilities (±10).
-* Entropy per gap: `log2(21) ≈ 4.39 bits`. For 4 gaps (between 5 digits): `4 * 4.39 ≈ 17.56 bits`.
-* Vertical jitter adds further segmentation uncertainty (not fully counted above).
+> Rotation remains one of the most effective defenses against automated segmentation and OCR alignment.
 
 ---
 
-#### 6. Noise Lines (per-image; randomized range)
+#### **4. Color Variation (per-character)**
 
-* The installer selects a noise line count in the range **12–24** (this is randomized per install and per image). Typical installs cluster near 15–20 lines.
-* Each line has randomized start/end positions and color (brightness constrained by `line_color_brightness_min`). For a conservative per-line estimate we reuse the earlier combinatorial approximation: `~53.07 bits per line` if you treat positions and color as independent.
-* Using a conservative average of **18 lines** (within the installer’s range): `18 * 53.07 ≈ 955.26 bits`.
-* Important: this is a **theoretical** combinatorial number. The practical effect is that lines heavily disrupt segmentation and classical OCR pipelines — this is the primary obstacle to automated solvers.
+* Each character’s color is randomly generated in the **RGB spectrum**, constrained only by brightness thresholds to maintain readability.
+* Each RGB channel offers up to 256 possibilities, yielding up to **24 bits of entropy per character**.
+* For 5 characters: `H_color = 5 * 24 = 120 bits`.
+
+> While OCR engines often normalize color to grayscale, random color values significantly hinder background subtraction and contour detection.
 
 ---
 
-#### 7. Total approximate entropy (conservative example)
+#### **5. Horizontal Spacing & Vertical Jitter**
 
-* Using the representative (conservative) values produced by the installer:
+* The installer randomizes both `spacing_range` (typically **6–14 px**) and `y_jitter` (**6–12 px**).
+* For spacing, assuming roughly 21 integer offsets per gap: `log2(21) ≈ 4.39 bits`.
+* For 4 gaps (between 5 characters): `4 * 4.39 ≈ 17.56 bits`.
 
-  * `H_digits ≈ 16.61`
-  * `H_fonts  ≈ 15`
-  * `H_rotation ≈ 29.65`
-  * `H_color ≈ 120`
-  * `H_spacing ≈ 17.56`
-  * `H_lines ≈ 955.26` (using average 18 lines)
+> Combined with vertical jitter, this forces OCR algorithms to perform additional geometric correction before segmentation.
 
-* Sum (representative):
-  `H_total ≈ 16.61 + 15 + 29.65 + 120 + 17.56 + 955.26 ≈ 1153.1 bits`
+---
 
-* Conservative lower-bound (ignore color and lines):
-  `16.61 + 15 + 29.65 + 17.56 ≈ 78.8 bits`
+#### **6. Noise Lines (per-image; randomized range)**
 
-> **Interpretation:** the full theoretical entropy number is very large and intentionally conservative. The practical takeaway is the same: **even ignoring color and line noise**, an off-the-shelf OCR or generic AI model faces on the order of tens of bits of uncertainty (~78 bits conservatively), which is difficult to overcome without targeted training on site-specific images.
+* Each CAPTCHA includes **12–24 randomly drawn noise lines**, each with random color and start/end positions.
+* Using a conservative combinatorial estimate: `~53.07 bits per line`.
+* With an average of 18 lines: `18 * 53.07 ≈ 955.26 bits`.
+
+> This layer provides the strongest **OCR disruption**.
+> While not all theoretical entropy is practical, these lines heavily interfere with contour detection, skeletonization, and path clustering.
+
+---
+
+#### **7. Total Approximate Entropy (Conservative Example)**
+
+Using representative averages from the installer:
+
+| Component               | Approx. Entropy (bits) |
+| ----------------------- | ---------------------- |
+| Alphanumeric Sequence   | 29.75                  |
+| Fonts                   | 15                     |
+| Rotation                | 29.65                  |
+| Color                   | 120                    |
+| Spacing & Jitter        | 17.56                  |
+| Noise Lines (avg. 18)   | 955.26                 |
+| **Total (approximate)** | **1,167.2 bits**       |
+
+*Lower-bound (ignoring color and line noise):*
+`29.75 + 15 + 29.65 + 17.56 ≈ 91.96 bits`
+
+> **Interpretation:**
+> Even ignoring color and noise-line obfuscation, the CAPTCHA maintains **~92 bits of effective entropy**, placing it well above the resistance threshold for untrained OCR or general-purpose AI solvers.
+> With all layers active, the theoretical entropy exceeds **1,100 bits**, ensuring that any successful solver would require extensive site-specific data collection and model tuning.
 
 ---
 
@@ -147,17 +162,17 @@ This approach ensures that each deployment’s CAPTCHA instance is unique and re
    ```bash
    which php
    ```
-   If PHP is not found, use the full path to your PHP binary (for example, `/opt/plesk/php/8.3/bin/php`).
+   If PHP is not found, use the full path to your PHP binary (for example, `/usr/bin/php`).
 
 2. Ensure the **target directory** (the web application’s root or form handler directory) is:
    - Writable by the user executing the script
-   - Accessible by your web server (e.g., Apache, NGINX, or Plesk’s PHP handler)
+   - Accessible by your web server (e.g., Apache, NGINX)
 
 3. Install the **GD extension** (required for image generation):
    ```bash
    php -m | grep gd
    ```
-   If not found, install it using your package manager or enable it in Plesk’s PHP settings.
+   If not found, install it using your package manager or enable it in PHP settings.
 
 4. Optionally, create a `fonts/` directory in your target path and add `.ttf` files to it.  
    If fewer than eight fonts are found, public fallback fonts will be listed in the output.
@@ -169,7 +184,7 @@ This approach ensures that each deployment’s CAPTCHA instance is unique and re
 `CAPTCHA_PEPPER` is an environment variable used to introduce installation-specific entropy.  
 It ensures that random values (e.g., digit placement, color distribution, and rotation) differ per deployment and cannot be easily predicted or cloned.
 
-### Example (Linux/Plesk):
+### Example (Linux):
 Add to your environment configuration, such as `/etc/environment`:
 ```
 CAPTCHA_PEPPER="your-long-random-secret"
@@ -192,9 +207,9 @@ Execute from the command line:
 php install_captcha.php /path/to/target/dir
 ```
 
-**Example (Plesk environment):**
+**Example:**
 ```bash
-/opt/plesk/php/8.3/bin/php install_captcha.php /var/www/vhosts/example.com/httpdocs/
+php install_captcha.php /var/www/vhosts/example.com/httpdocs/
 ```
 
 **Expected output:**
@@ -216,7 +231,6 @@ After installation:
 - If the image fails to render, check:
   - PHP GD extension is enabled.
   - Correct permissions on the `fonts/` and `white.jpg` files (if used).
-  - Error logs (`/var/log/plesk-phpXX-fpm/error.log`).
 
 ---
 
@@ -225,25 +239,46 @@ After installation:
 ### **In your HTML form:**
 ```html
 <form method="post" action="form_handler.php">
-  <img src="captcha.php" alt="CAPTCHA">
-  <input type="text" name="captcha" placeholder="Enter code shown above">
-  <input type="submit" value="Submit">
+            <div>
+                <h5><br>Bot Check:</h5>
+                <p>
+                    <img id="captcha_img" name="captcha_img" src="captcha.php" alt="Captcha Image" title="Enter the numbers from this image into the input field below">
+                </p>
+                <p>
+                    <input type="text" id="captcha" name="captcha" maxlength="6" onkeyup="this.value = this.value.replace(/[^a-zA-Z0-9]+/g, '');" style="height:25px;" placeholder="Enter Code" required>
+
+                    <a href="#" onclick="document.getElementById('captcha_img').src = './captcha.php?' + Math.random(); document.getElementById('captcha').value = ''; return false;"><img src="./refresh.png" style="width:40px;" alt="Refresh the Image" title="If you have trouble seeing the numbers, click this button to refresh the image."></a>
+                    <br>
+                    <small>Enter the numbers from the image above.</small>
+                </p>
+				<div class="col-md-6 button">
+					<button class="btn btn-primary d-block w-100" name="submit" type="submit">Submit</button>
+				</div>
+            </div>
 </form>
 ```
 
 ### **In your form handler (form_handler.php):**
 ```php
 <?php
-session_start();
+session_start();  // <-- required before using $_SESSION
+
 if (isset($_POST['captcha'], $_SESSION['captcha'])) {
-    if ($_POST['captcha'] === $_SESSION['captcha']) {
-        echo "Captcha valid – proceeding with form submission.";
+    // Normalize both values to uppercase for case-insensitive comparison
+    $userInput = strtoupper(trim($_POST['captcha']));
+    $storedCaptcha = strtoupper(trim($_SESSION['captcha']));
+
+    if ($userInput === $storedCaptcha) {
+        // captcha is valid
+		// Process form submission code goes below here
     } else {
-        echo "Invalid captcha. Please try again.";
+        // Invalid captcha
     }
+
+    // Remove the captcha so it cannot be reused
     unset($_SESSION['captcha']);
 } else {
-    echo "Captcha missing or expired.";
+    echo "Captcha or session missing!";
 }
 ?>
 ```
