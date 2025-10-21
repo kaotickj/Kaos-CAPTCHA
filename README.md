@@ -10,116 +10,101 @@ It is suitable for web applications where **strong anti-bot protection** is requ
 
 ## **Features**
 
-* Generates **5-character alphanumeric CAPTCHAs** (A–Z, a–z, 0–9), randomized per session.
-* Randomized **font selection per character** (8 fonts selected during installation).
-* Dynamic **font size** between **28 px – 36 px**.
-* Randomized **character rotation** between approximately **−30° and +30°**.
+* Generates **6-character alphanumeric CAPTCHAs** (randomized per session).
+* Randomized **font selection per digit/character** (8 fonts selected during installation).
+* Dynamic **font size** between 28 px – 36 px.
+* Randomized **character rotation range** between approximately −30° and +30°.
 * Adjustable **horizontal spacing** (6 – 14 px variation between characters).
 * Randomized **vertical jitter** (6 – 12 px) for irregular baseline placement.
 * Fully randomized **RGB color** per character, constrained to avoid excessively bright or dark tones.
 * Randomized **background** — uses `white.jpg` if present, otherwise generates a plain white background.
 * Adds **12–24 random noise lines** per CAPTCHA, each with unique color, position, and brightness.
-* Supports environment-based **CAPTCHA_PEPPER** for entropy seeding, improving unpredictability and per-installation uniqueness.
-* Automatically embeds **randomized per-installation parameters** for image dimensions, font behavior, noise density, and color variance.
-* Uses **deterministic seed generation** (HMAC-based) when `CAPTCHA_PEPPER` is defined, ensuring consistent yet unpredictable outputs within sessions.
-* Dependencies: **PHP 7.4+** (or newer) with **GD extension** enabled.
-* Produces a fully self-contained output file (`captcha.php`) requiring **no external libraries** or API calls.
+* Supports environment-based **CAPTCHA_PEPPER** for entropy seeding (optional but recommended).
+* Automatically embeds **per-installation randomized parameters** for image dimensions, noise density, and color balance.
+* Dependencies: **PHP 7.4 +** (or newer) with **GD extension** enabled.
+* Fully self-contained output (`captcha.php`) that requires **no external libraries** or API calls.
 
 ---
 
-### **Obfuscation and Security Analysis**
+### Obfuscation and Security Analysis
 
-This CAPTCHA script is engineered for **entropy and OCR resistance**.
-Each installation produces **site-specific randomized parameters** (fonts, rotation ranges, spacing, color balance, noise density), ensuring that every deployment yields a visually and statistically distinct image distribution.
-The following breakdown explains how each obfuscation layer contributes to overall resilience, using representative values produced by the installer.
+This captcha script is designed for **entropy and OCR resistance**. The installer produces **site-specific** randomized parameters (fonts, rotation ranges, spacing, color ranges, noise density) so each deployment yields a distinct image distribution. The following breakdown describes how each obfuscation layer contributes to overall resilience and shows a conservative example calculation using typical values produced by the installer.
 
 ![Captcha Resilience Visualization](assets/img/captcha_resilience_vis.png)
 
 ---
 
-#### **1. Random Alphanumeric Sequence**
+#### 1. Random Character Sequence
 
-* Each CAPTCHA consists of **5 alphanumeric characters** (A–Z, a–z, 0–9).
-* That provides **62 possibilities per character**.
+* Each captcha has **6 characters (alphanumeric)** → `57` possibilities per character (excluding ambiguous characters like `0, O, 1, l, I`).
 * Entropy formula: `H = log2(N^L) = L * log2(N)`
-* Calculated entropy (characters only): `H_chars = 5 * log2(62) ≈ 29.75 bits`
-* This forms the **baseline entropy** from the sequence itself — almost **double** that of numeric-only CAPTCHAs.
+* Calculated entropy (sequence only):
+  `H_sequence = 6 * log2(57) ≈ 35.0 bits`
+* This is the **baseline entropy** coming from the alphanumeric sequence alone.
 
 ---
 
-#### **2. Font Variability (per-install)**
+#### 2. Font Variability (per-install)
 
-* The installer embeds **8 randomly selected fonts** (from local `fonts/` or fallback fonts).
-* Each character randomly selects one of these fonts: `log2(8) ≈ 3 bits` per character.
-* For 5 characters: `H_fonts = 5 * 3 = 15 bits`.
+* Installer selects **8 fonts** (from local `fonts/` or public fallbacks) and embeds that list into the generated `captcha.php`.
+* Entropy per character (conservative estimate): `log2(8) ≈ 3 bits`
+* For 6 characters: `H_fonts = 6 * 3 = 18 bits`
 
-> Because font choice is fixed at install time but randomized per character, this adds **intra-installation variability** while maintaining distinctiveness between deployments.
-> Avoid publishing production font files to prevent reverse engineering of glyph shapes.
-
----
-
-#### **3. Rotation (per-character)**
-
-* Rotation is typically randomized between **−30° and +30°**, with exact bounds unique per installation.
-* Approximate distinct positions: **61 integer values**.
-* Entropy per character: `log2(61) ≈ 5.93 bits`.
-* For 5 characters: `5 * 5.93 ≈ 29.65 bits`.
-
-> Rotation remains one of the most effective defenses against automated segmentation and OCR alignment.
+> Note: fonts are chosen at install time (not per-request). If production fonts are leaked, an attacker could reduce entropy — do not publish production fonts.
 
 ---
 
-#### **4. Color Variation (per-character)**
+#### 3. Rotation (per-character)
 
-* Each character’s color is randomly generated in the **RGB spectrum**, constrained only by brightness thresholds to maintain readability.
-* Each RGB channel offers up to 256 possibilities, yielding up to **24 bits of entropy per character**.
-* For 5 characters: `H_color = 5 * 24 = 120 bits`.
-
-> While OCR engines often normalize color to grayscale, random color values significantly hinder background subtraction and contour detection.
+* Rotation range roughly **−30° to +30°** → 61 integer angles.
+* Entropy per character: `log2(61) ≈ 5.93 bits`
+* For 6 characters: `6 * 5.93 ≈ 35.6 bits`
 
 ---
 
-#### **5. Horizontal Spacing & Vertical Jitter**
+#### 4. Color Variation (per-character)
 
-* The installer randomizes both `spacing_range` (typically **6–14 px**) and `y_jitter` (**6–12 px**).
-* For spacing, assuming roughly 21 integer offsets per gap: `log2(21) ≈ 4.39 bits`.
-* For 4 gaps (between 5 characters): `4 * 4.39 ≈ 17.56 bits`.
-
-> Combined with vertical jitter, this forces OCR algorithms to perform additional geometric correction before segmentation.
+* Each RGB channel is randomized within a constrained range to avoid extremes, giving up to **24 bits per character** in theory.
+* For 6 characters: `H_color = 6 * 24 = 144 bits`
+* OCR may ignore color channels, but color remains a strong confounder for segmentation.
 
 ---
 
-#### **6. Noise Lines (per-image; randomized range)**
+#### 5. Horizontal Spacing & Vertical Jitter
 
-* Each CAPTCHA includes **12–24 randomly drawn noise lines**, each with random color and start/end positions.
-* Using a conservative combinatorial estimate: `~53.07 bits per line`.
-* With an average of 18 lines: `18 * 53.07 ≈ 955.26 bits`.
-
-> This layer provides the strongest **OCR disruption**.
-> While not all theoretical entropy is practical, these lines heavily interfere with contour detection, skeletonization, and path clustering.
+* Horizontal spacing: `spacing_range ≈ 6–14 px` → 21 integer possibilities per gap
+* 5 gaps between 6 characters: `H_spacing = 5 * log2(21) ≈ 23.9 bits`
+* Vertical jitter adds further segmentation uncertainty (not fully counted above).
 
 ---
 
-#### **7. Total Approximate Entropy (Conservative Example)**
+#### 6. Noise Lines (per-image)
 
-Using representative averages from the installer:
+* Installer selects **12–24 lines**, each with randomized start/end and color.
+* Conservative per-line entropy: `≈ 53.07 bits`
+* Using **18 lines** average: `H_lines ≈ 955.26 bits`
 
-| Component               | Approx. Entropy (bits) |
-| ----------------------- | ---------------------- |
-| Alphanumeric Sequence   | 29.75                  |
-| Fonts                   | 15                     |
-| Rotation                | 29.65                  |
-| Color                   | 120                    |
-| Spacing & Jitter        | 17.56                  |
-| Noise Lines (avg. 18)   | 955.26                 |
-| **Total (approximate)** | **1,167.2 bits**       |
+> Lines are the primary OCR-resistance feature — the practical difficulty they introduce outweighs raw entropy numbers.
 
-*Lower-bound (ignoring color and line noise):*
-`29.75 + 15 + 29.65 + 17.56 ≈ 91.96 bits`
+---
 
-> **Interpretation:**
-> Even ignoring color and noise-line obfuscation, the CAPTCHA maintains **~92 bits of effective entropy**, placing it well above the resistance threshold for untrained OCR or general-purpose AI solvers.
-> With all layers active, the theoretical entropy exceeds **1,100 bits**, ensuring that any successful solver would require extensive site-specific data collection and model tuning.
+#### 7. Total approximate entropy (conservative example)
+
+* Representative values:
+
+| Layer       | Entropy (bits) |
+| ----------- | -------------- |
+| Sequence    | 35.0           |
+| Fonts       | 18.0           |
+| Rotation    | 35.6           |
+| Color       | 144.0          |
+| Spacing     | 23.9           |
+| Noise Lines | 955.26         |
+
+* Sum: `H_total ≈ 1211.76 bits`
+* Conservative lower-bound (ignore color and lines): `35 + 18 + 35.6 + 23.9 ≈ 112.5 bits`
+
+> **Interpretation:** Even ignoring color and line noise, off-the-shelf OCR or AI solvers face **>100 bits of uncertainty** — extremely resistant to automated attacks without targeted, site-specific training.
 
 ---
 
