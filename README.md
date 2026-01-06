@@ -1,6 +1,6 @@
 # Kaos Captcha Generator
 
-A robust, highly resilient CAPTCHA generator designed to resist automated OCR and AI-based solving attempts. This script produces randomized numeric captchas with multiple obfuscation layers, including rotation, color variation, spacing irregularities, varied fonts, and noise lines.
+A robust, highly resilient CAPTCHA generator designed to resist automated OCR and AI-based solving attempts. This script produces randomized alpha-numeric captchas with multiple obfuscation layers, including rotation, color variation, spacing irregularities, varied fonts, and noise lines.
 
 It is suitable for web applications where **strong anti-bot protection** is required while remaining readable to human users.
 
